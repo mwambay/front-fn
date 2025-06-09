@@ -6,6 +6,8 @@ import { ClasseService, ClasseData } from '../../api/Classe.service';
 import { OptionService, OptionData } from '../../api/Option.service';
 import { ResultatService } from '../../api/Resultat.service';
 import { AnneeService, AnneeData } from '../../api/Annee.service';
+import { UploadCloud, Loader2, Image as ImageIcon } from 'lucide-react';
+import { GeminiService } from '../../api/Gemini.service';
 
 interface Student {
   id: string;
@@ -30,6 +32,13 @@ function RegisterResults() {
   const [classes, setClasses] = useState<ClasseData[]>([]);
   const [options, setOptions] = useState<OptionData[]>([]);
   const [annees, setAnnees] = useState<AnneeData[]>([]);
+
+  // Nouveaux états pour l'upload d'image
+  const [image, setImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extractedStudents, setExtractedStudents] = useState<Student[]>([]);
+  const [extractError, setExtractError] = useState<string | null>(null);
 
   useEffect(() => {
     // Charger les listes déroulantes depuis l'API
@@ -117,10 +126,74 @@ function RegisterResults() {
     setIsSubmitted(false);
   };
 
+  // Drag & drop handlers
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleImageChange(e.dataTransfer.files[0]);
+    }
+  };
+  const handleImageChange = (file: File) => {
+    setImage(file);
+    setImagePreview(URL.createObjectURL(file));
+    setExtractError(null);
+  };
+
+  // Simulation extraction IA
+const handleExtract = async () => {
+  if (!image) return;
+  setExtracting(true);
+  setExtractError(null);
+
+  try {
+    // 1. Upload de l'image
+    const formData = new FormData();
+    formData.append('file', image);
+
+    const uploadRes = await fetch('http://localhost:3000/gemini/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    if (!uploadRes.ok) throw new Error("Erreur lors de l'upload de l'image");
+    const { imagePath } = await uploadRes.json();
+
+    // 2. Appel à l'API Gemini Python (qui renvoie déjà un tableau JSON)
+    const analysis = await GeminiService.analyzeImage(imagePath);
+
+    // 3. Utilisation directe du tableau retourné
+    if (!Array.isArray(analysis)) {
+      setExtractError("Format inattendu des résultats IA.");
+      setExtracting(false);
+      return;
+    }
+
+    const studentsExtracted: Student[] = analysis.map((item: any, idx: number) => ({
+      id: Date.now() + '-' + idx,
+      gender: item.sexe, // ou item.SEXE selon le format exact
+      average: Number(item.moyenne),
+      status: Number(item.moyenne) >= 50 ? 'Réussi' : 'Échec',
+    }));
+
+    setExtractedStudents(studentsExtracted);
+  } catch (err) {
+    setExtractError("Erreur lors de l'analyse de l'image.");
+  }
+  setExtracting(false);
+};
+
+  // Ajoute les élèves extraits à la liste
+  const handleAddExtracted = () => {
+    setStudents([...students, ...extractedStudents]);
+    setExtractedStudents([]);
+    setImage(null);
+    setImagePreview(null);
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-800">Enregistrer un palmarès</h1>
-      
+
+
       {isSubmitted ? (
         <Card>
           <div className="flex flex-col items-center justify-center py-6">
@@ -221,6 +294,125 @@ function RegisterResults() {
             </div>
           </Card>
           
+
+      {/* Interface d'upload et extraction */}
+      <Card className="mb-6">
+        <div className="flex flex-col md:flex-row items-center gap-6">
+          <div
+            className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg w-full md:w-72 h-56 cursor-pointer transition-all duration-300 ${
+              imagePreview ? 'border-blue-400 bg-blue-50' : 'border-gray-300 bg-gray-50 hover:border-blue-400 hover:bg-blue-50'
+            }`}
+            onDrop={handleDrop}
+            onDragOver={e => e.preventDefault()}
+            onClick={() => document.getElementById('image-upload')?.click()}
+          >
+              {imagePreview ? (
+                <div className="relative w-full h-40 flex items-center justify-center">
+                  <img src={imagePreview} alt="Aperçu" className="object-contain h-40 w-full rounded-md shadow" />
+                  {extracting && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      {/* Animation scan */}
+                      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-200/60 to-transparent animate-scan pointer-events-none rounded-md" />
+                      <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-blue-700 text-xs font-semibold bg-white/80 px-2 py-1 rounded shadow">
+                        Analyse en cours...
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center">
+                  <UploadCloud size={40} className="text-blue-400 animate-bounce mb-2" />
+                  <span className="text-gray-500 text-sm mt-2 mb-2 mx-4 text-center">Glissez-déposez ou cliquez pour importer une photo</span>
+                  <span className="text-xs text-gray-400 mt-1">Format JPG, PNG, max 5Mo</span>
+                </div>
+              )}
+            <input
+              id="image-upload"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={e => e.target.files && handleImageChange(e.target.files[0])}
+            />
+          </div>
+          <div className="flex-1 flex flex-col items-center md:items-start">
+            <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+              <ImageIcon size={18} className="text-blue-400" />
+              Extraction automatique des résultats
+            </h3>
+            <p className="text-gray-500 text-sm mb-4">
+              Importez une photo claire du palmarès papier. Notre IA détectera automatiquement les élèves, genres, moyennes et statuts.
+            </p>
+            <button
+              type="button"
+              className={`px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2 ${
+                (!image || extracting) && 'cursor-not-allowed'
+              }`}
+              disabled={!image || extracting}
+              onClick={handleExtract}
+            >
+              {extracting ? (
+                <>
+                  <Loader2 className="animate-spin" size={18} /> Analyse en cours...
+                </>
+              ) : (
+                'Analyser la photo'
+              )}
+            </button>
+            {extractError && <p className="text-red-500 mt-2">{extractError}</p>}
+          </div>
+        </div>
+        {/* Animation et affichage des résultats extraits */}
+        {extracting && (
+          <div className="flex justify-center mt-4">
+            <Loader2 className="animate-spin text-blue-500" size={32} />
+            <span className="ml-3 text-blue-600 font-medium">Extraction des résultats...</span>
+          </div>
+        )}
+        {extractedStudents.length > 0 && (
+          <div className="mt-6 animate-fade-in">
+            <h4 className="font-semibold text-gray-700 mb-2">Résultats détectés :</h4>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 shadow rounded-lg">
+                <thead className="bg-blue-50">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Genre</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Moyenne</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {extractedStudents.map((student) => (
+                    <tr key={student.id}>
+                      <td className="px-4 py-2">{student.gender}</td>
+                      <td className="px-4 py-2">{student.average}</td>
+                      <td className="px-4 py-2">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          student.status === 'Réussi'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {student.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end mt-4">
+              <button
+                type="button"
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition"
+                onClick={handleAddExtracted}
+              >
+                Ajouter à la liste
+              </button>
+            </div>
+          </div>
+        )}
+      </Card>
+      
+
           <Card title="Moyennes par élève" className="mb-6">
             <div className="mb-6">
               <div className="grid grid-cols-12 gap-4 mb-2">
