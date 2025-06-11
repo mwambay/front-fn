@@ -29,16 +29,17 @@ export const GeminiService = {
     return response.data.summary;
   },
 
+
   /**
-   * Analyse une image via Gemini (envoie le chemin de l'image au backend)
-   * @param imagePath Chemin de l'image sur le serveur backend
+   * Analyse une image via Gemini (envoie le chemin de l'image et une instruction au backend Python)
+   * @param imageName Nom du fichier image sur le serveur backend
+   * @param instruction Instructions supplémentaires pour l'IA (optionnel)
    */
-async analyzeImage(imageName: string): Promise<string> {
-  const response = await axios.post(
-    'http://127.0.0.1:8000/analyze-image/',
-    { image_name: imageName }
-  );
-  console.log('Response from backend:', response.data.result);
-  return response.data.result;
-}
+  async analyzeImage(imageName: string, instruction: string = ''): Promise<any[]> {
+    const response = await axios.post(
+      'http://127.0.0.1:8000/analyze-image/',
+      { image_name: imageName, instruction }
+    );
+    return response.data.result;
+  }
 };

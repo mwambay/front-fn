@@ -40,6 +40,10 @@ function RegisterResults() {
   const [extractedStudents, setExtractedStudents] = useState<Student[]>([]);
   const [extractError, setExtractError] = useState<string | null>(null);
 
+  // Nouveaux états pour la configuration du scan
+  const [showScanConfig, setShowScanConfig] = useState(false);
+  const [scanInstruction, setScanInstruction] = useState('');
+
   useEffect(() => {
     // Charger les listes déroulantes depuis l'API
     SchoolService.getAllSchools().then(setSchools);
@@ -140,46 +144,46 @@ function RegisterResults() {
   };
 
   // Simulation extraction IA
-const handleExtract = async () => {
-  if (!image) return;
-  setExtracting(true);
-  setExtractError(null);
+  const handleExtract = async () => {
+    if (!image) return;
+    setExtracting(true);
+    setExtractError(null);
 
-  try {
-    // 1. Upload de l'image
-    const formData = new FormData();
-    formData.append('file', image);
+    try {
+      // 1. Upload de l'image
+      const formData = new FormData();
+      formData.append('file', image);
 
-    const uploadRes = await fetch('http://localhost:3000/gemini/upload', {
-      method: 'POST',
-      body: formData,
-    });
-    if (!uploadRes.ok) throw new Error("Erreur lors de l'upload de l'image");
-    const { imagePath } = await uploadRes.json();
+      const uploadRes = await fetch('http://localhost:3000/gemini/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!uploadRes.ok) throw new Error("Erreur lors de l'upload de l'image");
+      const { imagePath } = await uploadRes.json();
 
-    // 2. Appel à l'API Gemini Python (qui renvoie déjà un tableau JSON)
-    const analysis = await GeminiService.analyzeImage(imagePath);
+      // 2. Appel à l'API Gemini Python avec instruction supplémentaire
+      const analysis = await GeminiService.analyzeImage(imagePath, scanInstruction);
 
-    // 3. Utilisation directe du tableau retourné
-    if (!Array.isArray(analysis)) {
-      setExtractError("Format inattendu des résultats IA.");
-      setExtracting(false);
-      return;
+      // 3. Utilisation directe du tableau retourné
+      if (!Array.isArray(analysis)) {
+        setExtractError("Format inattendu des résultats IA.");
+        setExtracting(false);
+        return;
+      }
+
+      const studentsExtracted: Student[] = analysis.map((item: any, idx: number) => ({
+        id: Date.now() + '-' + idx,
+        gender: item.sexe,
+        average: Number(item.moyenne),
+        status: Number(item.moyenne) >= 50 ? 'Réussi' : 'Échec',
+      }));
+
+      setExtractedStudents(studentsExtracted);
+    } catch (err) {
+      setExtractError("Erreur lors de l'analyse de l'image.");
     }
-
-    const studentsExtracted: Student[] = analysis.map((item: any, idx: number) => ({
-      id: Date.now() + '-' + idx,
-      gender: item.sexe, // ou item.SEXE selon le format exact
-      average: Number(item.moyenne),
-      status: Number(item.moyenne) >= 50 ? 'Réussi' : 'Échec',
-    }));
-
-    setExtractedStudents(studentsExtracted);
-  } catch (err) {
-    setExtractError("Erreur lors de l'analyse de l'image.");
-  }
-  setExtracting(false);
-};
+    setExtracting(false);
+  };
 
   // Ajoute les élèves extraits à la liste
   const handleAddExtracted = () => {
@@ -297,7 +301,43 @@ const handleExtract = async () => {
 
       {/* Interface d'upload et extraction */}
       <Card className="mb-6">
-        <div className="flex flex-col md:flex-row items-center gap-6">
+        {/* Bouton configuration du scan */}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            className="bg-white/80 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded px-3 py-1 text-xs shadow transition"
+            onClick={() => setShowScanConfig(v => !v)}
+          >
+            Configuration du scan
+          </button>
+        </div>
+        {/* Champ de configuration */}
+        {showScanConfig && (
+          <div className="flex justify-end mt-2">
+            <div className="bg-white border border-blue-200 rounded shadow p-3 z-10 w-full md:w-1/2 animate-fade-in">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Instructions supplémentaires pour l'IA :
+              </label>
+              <textarea
+                className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-blue-500"
+                rows={3}
+                placeholder="Exemple : ignorer les lignes incomplètes, extraire aussi la mention, etc."
+                value={scanInstruction}
+                onChange={e => setScanInstruction(e.target.value)}
+              />
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="mt-2 px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition"
+                  onClick={() => setShowScanConfig(false)}
+                >
+                  Valider
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="flex flex-col md:flex-row items-center gap-6 mt-2">
           <div
             className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg w-full md:w-72 h-56 cursor-pointer transition-all duration-300 ${
               imagePreview ? 'border-blue-400 bg-blue-50' : 'border-gray-300 bg-gray-50 hover:border-blue-400 hover:bg-blue-50'
