@@ -5,6 +5,8 @@ const API_URL = 'http://localhost:3000/options';
 export interface OptionData {
   id: number;
   nom: string;
+    ecoleId?: number; // Ajoute ceci
+
 }
 
 export const OptionService = {

@@ -7,6 +7,8 @@ export interface ClasseData {
   nom: string;
   niveau: string;
   numero_ordre: number;
+  ecoleId?: number;  // Ajoute ceci
+  optionId?: number; // Ajoute ceci
 }
 
 export const ClasseService = {

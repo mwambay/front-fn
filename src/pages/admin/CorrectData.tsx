@@ -144,88 +144,170 @@ function CorrectData() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-800">Corriger des données</h1>
       
-      <Card>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              École
-            </label>
-            <select
-              value={selectedSchool}
-              onChange={e => {
-                setSelectedSchool(e.target.value);
-                setSelectedClass('');
-                setSelectedOption('');
-              }}
-              className="w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Toutes les écoles</option>
-              {schools.map(s => (
-                <option key={s.id} value={s.id}>{s.nom}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Classe
-            </label>
-            <select
-              value={selectedClass}
-              onChange={e => {
-                setSelectedClass(e.target.value);
-                setSelectedOption('');
-              }}
-              className="w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              disabled={!selectedSchool}
-            >
-              <option value="">Toutes les classes</option>
-              {classes
-                .filter(c => !selectedSchool || c.ecoleId === Number(selectedSchool) || !c.ecoleId)
-                .map(c => (
-                  <option key={c.id} value={c.id}>{c.nom}</option>
-                ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Option
-            </label>
-            <select
-              value={selectedOption}
-              onChange={e => setSelectedOption(e.target.value)}
-              disabled={!selectedSchool}
-              className={`w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
-                !selectedSchool ? 'bg-gray-100 cursor-not-allowed' : ''
-              }`}
-            >
-              <option value="">Toutes les options</option>
-              {filteredOptions.map(o => (
-                <option key={o.id} value={o.id}>{o.nom}</option>
-              ))}
-            </select>
-            {!selectedSchool && (
-              <p className="text-xs text-gray-500 mt-1">
-                Veuillez d'abord sélectionner une école pour activer les options.
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Recherche
-            </label>
-            <input
-              type="text"
-              placeholder="Rechercher par école ou classe..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
+      {/* Vue hiérarchique avec chargement progressif */}
+      <Card className="mb-6">
+        <h2 className="text-xl font-semibold text-gray-800 mb-4">Navigation hiérarchique</h2>
+        
+        {/* Étape 1: Sélection École */}
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-blue-700 mb-3">Sélectionner une école</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {schools.map(school => (
+              <div
+                key={school.id}
+                className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                  selectedSchool === school.id.toString()
+                    ? 'border-blue-500 bg-blue-50 shadow-md'
+                    : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                }`}
+                onClick={() => {
+                  setSelectedSchool(school.id.toString());
+                  setSelectedOption('');
+                  setSelectedClass('');
+                  // Charger les options de cette école
+                  OptionService.getAllOptions().then(allOptions => {
+                    const schoolOptions = allOptions.filter(opt => opt.ecoleId === school.id);
+                    setOptions(schoolOptions);
+                  });
+                }}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-semibold text-gray-800">{school.nom}</h4>
+                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                    {school.ville}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600">{school.commune}</p>
+                <p className="text-xs text-gray-500 mt-1">{school.type_ecole}</p>
+              </div>
+            ))}
           </div>
         </div>
-        <DataTable
-          columns={columns}
-          data={filteredResults}
-        />
+
+        {/* Étape 2: Sélection Option (visible seulement si école sélectionnée) */}
+        {selectedSchool && (
+          <div className="mb-6 animate-fade-in">
+            <h3 className="text-lg font-medium text-green-700 mb-3">Sélectionner une option</h3>
+            {options.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {options.map(option => (
+                  <div
+                    key={option.id}
+                    className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${
+                      selectedOption === option.id.toString()
+                        ? 'border-green-500 bg-green-50 shadow-md'
+                        : 'border-gray-200 hover:border-green-300 hover:bg-gray-50'
+                    }`}
+                    onClick={() => {
+                      setSelectedOption(option.id.toString());
+                      setSelectedClass('');
+                      // Charger les classes de cette école et option
+                      ClasseService.getAllClasses().then(allClasses => {
+                        const schoolClasses = allClasses.filter(cls => 
+                          cls.ecoleId === Number(selectedSchool) && cls.optionId === option.id
+                        );
+                        setClasses(schoolClasses);
+                      });
+                    }}
+                  >
+                    <h4 className="font-medium text-gray-800">{option.nom}</h4>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 italic">Aucune option disponible pour cette école</p>
+            )}
+          </div>
+        )}
+
+        {/* Étape 3: Sélection Classe (visible seulement si option sélectionnée) */}
+        {selectedOption && (
+          <div className="mb-6 animate-fade-in">
+            <h3 className="text-lg font-medium text-purple-700 mb-3">Sélectionner une classe</h3>
+            {classes.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {classes.map(classe => (
+                  <div
+                    key={classe.id}
+                    className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${
+                      selectedClass === classe.id.toString()
+                        ? 'border-purple-500 bg-purple-50 shadow-md'
+                        : 'border-gray-200 hover:border-purple-300 hover:bg-gray-50'
+                    }`}
+                    onClick={() => {
+                      setSelectedClass(classe.id.toString());
+                      // Charger les résultats pour cette combinaison
+                      ResultatService.getAllResultats().then(allResults => {
+                        const filteredResults = allResults.filter(result => {
+                          const schoolId = typeof result.ecole === 'object' ? (result.ecole as any).id : Number(result.ecole);
+                          const classId = typeof result.classe === 'object' ? (result.classe as any).id : Number(result.classe);
+                          const optionId = typeof result.option === 'object' ? (result.option as any).id : Number(result.option);
+                          
+                          return schoolId === Number(selectedSchool) && 
+                                 classId === classe.id && 
+                                 optionId === Number(selectedOption);
+                        });
+                        setResults(filteredResults);
+                      });
+                    }}
+                  >
+                    <h4 className="font-medium text-gray-800">{classe.nom}</h4>
+                    <p className="text-xs text-gray-500">{classe.niveau}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 italic">Aucune classe disponible pour cette option</p>
+            )}
+          </div>
+        )}
+
+        {/* Étape 4: Liste des élèves (visible seulement si classe sélectionnée) */}
+        {selectedClass && filteredResults.length > 0 && (
+          <div className="animate-fade-in">
+            <h3 className="text-lg font-medium text-indigo-700 mb-3">
+              Élèves de la classe ({filteredResults.length} résultats)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {filteredResults.map(result => (
+                <div
+                  key={result.id}
+                  className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => handleEdit(result)}
+                >
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex items-center">
+                      <span className={`inline-block w-3 h-3 rounded-full mr-2 ${
+                        result.genre === 'M' ? 'bg-blue-400' : 'bg-pink-400'
+                      }`}></span>
+                      <span className="font-medium">{result.genre}</span>
+                    </div>
+                    <span className={`px-2 py-1 rounded text-sm font-semibold ${
+                      result.moyenne >= 50 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {result.moyenne}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {result.mention}
+                  </div>
+                  <button className="mt-2 w-full text-xs bg-blue-100 text-blue-700 py-1 rounded hover:bg-blue-200 transition-colors">
+                    Modifier
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Message si aucune donnée */}
+        {selectedClass && filteredResults.length === 0 && (
+          <div className="text-center py-8">
+            <p className="text-gray-500 italic">Aucun élève trouvé pour cette sélection</p>
+          </div>
+        )}
       </Card>
       
       {selectedResult && (
@@ -266,3 +348,15 @@ function CorrectData() {
 }
 
 export default CorrectData;
+
+/* Ajoute cette animation CSS dans ton fichier global */
+<style jsx>{`
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+`}</style>
